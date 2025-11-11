@@ -1,0 +1,22 @@
+{
+  "name": "ev_station_locator",
+  "version": "0.1.0",
+  "bin": {
+    "ev_station_locator": "bin/ev_station_locator.js"
+  },
+  "scripts": {
+    "build": "echo \"The build step is not required when using JavaScript!\" && exit 0",
+    "cdk": "cdk",
+    "test": "jest"
+  },
+  "devDependencies": {
+    "aws-cdk": "2.1031.2",
+    "jest": "^29.7.0"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.927.0",
+    "aws-cdk-lib": "2.215.0",
+    "constructs": "^10.0.0",
+    "ngeohash": "^0.6.3"
+  }
+}

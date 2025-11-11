@@ -1,0 +1,10 @@
+{
+  "name": "transform-station-data",
+  "version": "1.0.0",
+  "description": "Transform station data CSV with TAZID mapping",
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.0.0",
+    "@aws-sdk/client-dynamodb": "^3.0.0",
+    "fast-csv": "^4.3.6"
+  }
+}

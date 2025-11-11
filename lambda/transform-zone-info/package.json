@@ -1,0 +1,13 @@
+{
+  "name": "transform-zone-info",
+  "version": "1.0.0",
+  "description": "Lambda function to transform zone-information.csv to DynamoDB",
+  "main": "index.js",
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.621.0",
+    "@aws-sdk/client-s3": "^3.621.0",
+    "@aws-sdk/lib-dynamodb": "^3.621.0",
+    "fast-csv": "^5.0.1",
+    "ngeohash": "^0.6.3"
+  }
+}

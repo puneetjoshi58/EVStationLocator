@@ -1,0 +1,10 @@
+{
+  "name": "validate-csv-lambda",
+  "version": "1.0.0",
+  "description": "Lambda function to validate EV station CSV files",
+  "main": "index.js",
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.0.0",
+    "fast-csv": "^5.0.0"
+  }
+}
