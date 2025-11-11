@@ -55,9 +55,10 @@ async function readStationInfoCsv(bucketName, key) {
   return new Promise((resolve, reject) => {
     const stream = response.Body;
 
+    
     stream
       .pipe(csv.parse({ headers: true, trim: true, ignoreEmpty: true }))
-      .on('data', (row) => {
+      .on('data', (row) => { //Callback till there is 'data' match headers to columns to get data for each row till 'end' or 'error' 
         try {
           const stationId = parseInt(row.station_id);
           const latitude = parseFloat(row.latitude);

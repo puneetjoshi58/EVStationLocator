@@ -1,23 +1,11 @@
-/**
- * Shared DynamoDB utility functions for batch write operations
- * Used by both transform-station-info and transform-station-data Lambdas
- */
-
 const { DynamoDBClient, BatchWriteItemCommand } = require('@aws-sdk/client-dynamodb');
 const { marshall } = require('@aws-sdk/util-dynamodb');
 
-const BATCH_SIZE = 25; // DynamoDB BatchWriteItem limit
+const BATCH_SIZE = 25; 
 const MAX_RETRIES = 3;
 
 const dynamoClient = new DynamoDBClient({ region: process.env.AWS_REGION });
 
-/**
- * Write items to DynamoDB using BatchWriteItem with retry logic
- * 
- * @param {Array} items - Array of items to write
- * @param {string} tableName - DynamoDB table name
- * @returns {Object} - { successCount, failedCount, unprocessedItems }
- */
 async function writeToDynamoDB(items, tableName) {
   const batches = chunkArray(items, BATCH_SIZE);
   let successCount = 0;
@@ -52,14 +40,6 @@ async function writeToDynamoDB(items, tableName) {
   };
 }
 
-/**
- * Write a single batch with exponential backoff retry for unprocessed items
- * 
- * @param {Array} items - Batch of items to write
- * @param {string} tableName - DynamoDB table name
- * @param {number} retryCount - Current retry attempt (for exponential backoff)
- * @returns {Object} - { successCount, failedCount, unprocessedItems }
- */
 async function writeBatchWithRetry(items, tableName, retryCount = 0) {
   const requestItems = {
     [tableName]: items.map(item => ({
@@ -76,20 +56,17 @@ async function writeBatchWithRetry(items, tableName, retryCount = 0) {
 
     const response = await dynamoClient.send(command);
 
-    // Handle unprocessed items (throttling, capacity limits, etc.)
     const unprocessedItems = response.UnprocessedItems?.[tableName] || [];
 
     if (unprocessedItems.length > 0) {
       console.warn(`Batch had ${unprocessedItems.length} unprocessed items`);
 
-      // Retry unprocessed items with exponential backoff
       if (retryCount < MAX_RETRIES) {
-        const backoffMs = Math.pow(2, retryCount) * 100; // 100ms, 200ms, 400ms
+        const backoffMs = Math.pow(2, retryCount) * 100;
         console.log(`Retrying ${unprocessedItems.length} unprocessed items after ${backoffMs}ms (attempt ${retryCount + 1}/${MAX_RETRIES})`);
         
         await sleep(backoffMs);
 
-        // Unmarshall items back to plain objects for retry
         const unprocessedData = unprocessedItems.map(item => unmarshallItem(item.PutRequest.Item));
 
         return await writeBatchWithRetry(unprocessedData, tableName, retryCount + 1);
@@ -129,12 +106,6 @@ async function writeBatchWithRetry(items, tableName, retryCount = 0) {
   }
 }
 
-/**
- * Unmarshall a DynamoDB item back to plain JavaScript object
- * 
- * @param {Object} marshalledItem - DynamoDB marshalled item
- * @returns {Object} - Plain JavaScript object
- */
 function unmarshallItem(marshalledItem) {
   const obj = {};
   Object.keys(marshalledItem).forEach(key => {
@@ -147,13 +118,6 @@ function unmarshallItem(marshalledItem) {
   return obj;
 }
 
-/**
- * Split array into chunks of specified size
- * 
- * @param {Array} array - Array to chunk
- * @param {number} size - Chunk size
- * @returns {Array[]} - Array of chunks
- */
 function chunkArray(array, size) {
   const chunks = [];
   for (let i = 0; i < array.length; i += size) {
@@ -162,12 +126,6 @@ function chunkArray(array, size) {
   return chunks;
 }
 
-/**
- * Sleep for specified milliseconds
- * 
- * @param {number} ms - Milliseconds to sleep
- * @returns {Promise} - Promise that resolves after sleep
- */
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }

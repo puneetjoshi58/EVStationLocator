@@ -8,28 +8,26 @@ exports.handler = async (event) => {
   console.log('Event received:', JSON.stringify(event, null, 2));
 
   const bucketName = event.bucketName || process.env.BUCKET_NAME;
-  const metric = event.metric;
-  const csvKey = `urban-ev-data/charge_1hour/${metric}.csv`;
   const tableName = process.env.STATION_DATA_TABLE_NAME;
 
   try {
+    console.log('Starting zone-level charge metrics transformation');
+    
+    // Process all metrics and combine them
+    const combinedData = await processAllMetrics(bucketName);
+    console.log(`Parsed ${combinedData.length} zone-level records (combined metrics)`);
 
-    console.log(`Reading ${csvKey} from bucket ${bucketName}`);
-    const dataPoints = await readChargeCsv(bucketName, csvKey, metric);
-    console.log(`Parsed ${dataPoints.length} zone-level data points from CSV for metric: ${metric}`);
-
-    const results = await writeToDynamoDB(dataPoints, tableName);
+    const results = await writeToDynamoDB(combinedData, tableName);
     const isSuccess = results.successCount > 0;
 
     return {
       statusCode: isSuccess ? 200 : 500,
       success: isSuccess,
-      metric: metric,
       message: isSuccess 
-        ? `Metric ${metric} transformed with ${results.failedCount > 0 ? 'partial' : 'complete'} success`
-        : `Failed to transform metric ${metric}`,
+        ? `Zone-level charge metrics transformed with ${results.failedCount > 0 ? 'partial' : 'complete'} success`
+        : `Failed to transform zone-level charge metrics`,
       stats: {
-        totalDataPoints: dataPoints.length,
+        totalRecords: combinedData.length,
         successfulWrites: results.successCount,
         failedWrites: results.failedCount,
         unprocessedItems: results.unprocessedItems.length
@@ -38,17 +36,14 @@ exports.handler = async (event) => {
     };
 
   } catch (error) {
-    console.error(`Error transforming metric ${metric}:`, error);
+    console.error(`Error transforming zone-level charge metrics:`, error);
     
-    // Continue processing other metrics even if this one fails
     return {
       statusCode: 500,
       success: false,
-      metric: metric,
       error: error.message,
-      stack: error.stack,
       stats: {
-        totalDataPoints: 0,
+        totalRecords: 0,
         successfulWrites: 0,
         failedWrites: 0,
         unprocessedItems: 0
@@ -57,20 +52,63 @@ exports.handler = async (event) => {
   }
 };
 
-async function readChargeCsv(bucketName, key, metric) {
+async function processAllMetrics(bucketName) {
+
+  const metrics = ['duration', 'e_price', 's_price', 'occupancy', 'volume-11kw'];
+  
+  console.log('Reading all metric CSVs...');
+  const metricDataMaps = await Promise.all(
+    metrics.map(metric => readMetricCsv(bucketName, metric))
+  );
+
+  // Combine into zone-timestamp records
+  const combinedMap = new Map();
+
+  metricDataMaps.forEach((metricMap, idx) => {
+    const metricName = metrics[idx];
+    console.log(`Processing ${metricName}: ${metricMap.size} zone-timestamp combinations`);
+
+    metricMap.forEach((value, key) => {
+      if (!combinedMap.has(key)) {
+        const [tazid, timestamp] = key.split('#');
+        combinedMap.set(key, {
+          PK: `ZONE#${tazid}`,
+          SK: timestamp,
+          TAZID: parseInt(tazid),
+          Timestamp: timestamp
+        });
+      }
+      
+      const record = combinedMap.get(key);
+      record[metricName === 'volume-11kw' ? 'volume_11kw' : metricName] = value;
+    });
+  });
+
+  const finalRecords = [];
+  combinedMap.forEach(record => {
+    if (record.e_price !== undefined && record.s_price !== undefined) {
+      record.total_price = record.e_price + record.s_price;
+      delete record.e_price;
+      delete record.s_price;
+    }
+    finalRecords.push(record);
+  });
+
+  console.log(`Combined ${finalRecords.length} records with metrics merged`);
+  return finalRecords;
+}
+
+async function readMetricCsv(bucketName, metric) {
+  const key = `urban-ev-data/charge_1hour/${metric}.csv`;
   const command = new GetObjectCommand({
     Bucket: bucketName,
     Key: key
   });
 
   const response = await s3Client.send(command);
-  const dataPoints = [];
+  const dataMap = new Map(); // key: "tazid#timestamp", value: metric value
   
-  // Limit processing to avoid timeout and stay within Free Tier write capacity
-  // With 5 WCU for Station_Data, we can write ~5 items/second
-  // 10 rows × 275 zones = 2,750 items per metric
-  // At 5 WCU: ~550 seconds (~9 minutes) - well within 15-minute Lambda timeout
-  const MAX_ROWS = 10;
+  const MAX_ROWS = 1000;
   let rowCount = 0;
 
   return new Promise((resolve, reject) => {
@@ -83,14 +121,11 @@ async function readChargeCsv(bucketName, key, metric) {
       .on('data', (row) => {
         try {
           if (isFirstRow) {
-            // First row contains headers: ['time', '102', '104', '105', ...]
             headers = row.map(h => h.trim().toLowerCase());
             isFirstRow = false;
-            console.log(`Headers found: ${headers.length} columns (${headers.slice(0, 3).join(', ')}...)`);
             return;
           }
 
-          // Stop processing after MAX_ROWS to prevent timeout
           rowCount++;
           if (rowCount > MAX_ROWS) {
             return;
@@ -105,29 +140,22 @@ async function readChargeCsv(bucketName, key, metric) {
             if (isNaN(value)) continue;
 
             const tazid = parseInt(header);
-            if (isNaN(tazid)) {
-              console.warn(`Could not parse TAZID from header: ${header}`);
-              continue;
-            }
+            if (isNaN(tazid)) continue;
 
-            dataPoints.push({
-              ZoneId: `ZONE#${tazid}`,
-              Timestamp: timestamp,
-              TAZID: tazid,
-              [metric]: value  // Store metric as attribute name
-            });
+            const key = `${tazid}#${timestamp}`;
+            dataMap.set(key, value);
           }
 
         } catch (error) {
-          console.warn(`Skipping invalid row: ${JSON.stringify(row)}`, error.message);
+          console.warn(`Skipping invalid row in ${metric}:`, error.message);
         }
       })
       .on('end', () => {
-        console.log(`Finished parsing ${dataPoints.length} zone-level data points for metric ${metric} (processed ${rowCount} rows)`);
-        resolve(dataPoints);
+        console.log(`Finished parsing ${metric}: ${dataMap.size} data points (${rowCount} rows)`);
+        resolve(dataMap);
       })
       .on('error', (error) => {
-        console.error('CSV parsing error:', error);
+        console.error(`CSV parsing error for ${metric}:`, error);
         reject(error);
       });
   });

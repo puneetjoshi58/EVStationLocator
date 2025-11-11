@@ -2,36 +2,41 @@ const { S3Client, GetObjectCommand } = require('@aws-sdk/client-s3');
 const { SFNClient, StartExecutionCommand } = require('@aws-sdk/client-sfn');
 
 const s3 = new S3Client();
-const sfn = new SFNClient();
+const StepFunction = new SFNClient();
 
-const STATE_MACHINE_ARN = process.env.STATE_MACHINE_ARN;
+//since already deployed as part of CDK stack this information is available
+const STATE_MACHINE_ARN = process.env.STATE_MACHINE_ARN; 
 const BUCKET = process.env.BUCKET_NAME;
 
+//S3 trigger sends event for each uploaded file
 exports.handler = async (event) => {
   console.log('Received S3 event:', JSON.stringify(event, null, 2));
   
   for (const record of event.Records || []) {
-    const key = decodeURIComponent(record.s3.object.key.replace(/\+/g, ' '));
+    const key = record.s3.object.key;
 
     if (!key.endsWith('_manifest.json')) {
       console.log(`Skipping non-manifest file: ${key}`);
       continue;
     }
     
+    //when file ending with _manifest.json is uploaded get its details and store 
     console.log(`Processing manifest: ${key}`);
     
     try {
-      const obj = await s3.send(new GetObjectCommand({ 
+      const obj = await s3.send(new GetObjectCommand({ //get the manifest file details
         Bucket: BUCKET, 
         Key: key 
       }));
       
+      //using manifest file details exract its content to send to stepfunction later
       const manifestData = await streamToString(obj.Body);
       const manifest = JSON.parse(manifestData);
       
       console.log(`Manifest contains ${manifest.counts.totalFiles} files`);
       
-      const execName = `manifest-${Date.now()}`;
+      //prepare information to start step function execution which it passes onto lambda
+      const execName = `ETLPipeline-${Date.now()}`;
       const input = {
         bucket: BUCKET,
         manifestKey: key,
@@ -49,7 +54,8 @@ exports.handler = async (event) => {
         ]
       };
       
-      await sfn.send(new StartExecutionCommand({
+
+      await StepFunction.send(new StartExecutionCommand({
         stateMachineArn: STATE_MACHINE_ARN,
         name: execName,
         input: JSON.stringify(input)
