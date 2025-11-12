@@ -186,7 +186,7 @@ Attributes:
 
 The following diagram illustrates the complete ETL pipeline workflow:
 
-![Step Functions Workflow](./docs/images/workflow-diagram.png)
+![Step Functions Workflow](./docs/images/ETL_Pipeline.drawio.png)
 
 *Figure: Step Functions state machine orchestrating CSV validation and parallel data transformation*
 
