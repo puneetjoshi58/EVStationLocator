@@ -190,6 +190,14 @@ The following diagram illustrates the complete ETL pipeline workflow:
 
 *Figure: Step Functions state machine orchestrating CSV validation and parallel data transformation*
 
+### AWS Console Graph View
+
+The actual Step Functions state machine as shown in the AWS Console:
+
+![Step Functions Graph](./docs/images/stepfunction_graph.png)
+
+*Figure: Step Functions execution graph from AWS Console showing all states and transitions*
+
 ### Lambda Functions
 
 | Function | Purpose | Timeout | Memory |
