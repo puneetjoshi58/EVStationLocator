@@ -184,66 +184,11 @@ Attributes:
 
 ### Workflow Diagram
 
-```
-┌─────────────────────────────┐
-│  ValidateCSVFiles (Lambda)  │
-│  - Schema validation        │
-│  - Data quality checks      │
-│  - TAZID mapping            │
-└──────────────┬──────────────┘
-               │
-               ▼
-┌─────────────────────────────────────┐
-│ IsValidationSuccessful? (Choice)    │
-└──────┬──────────────────────┬───────┘
-    ✅ YES                   ❌ NO
-       │                      │
-       ▼                      ▼
-┌──────────────────┐   ┌──────────────────┐
-│ TransformInParallel│   │ ValidationFailed │
-│    (Parallel)     │   │      (Fail)      │
-└────┬─────────┬───┘   └──────────────────┘
-     │         │
-     ▼         ▼
-┌─────────────────┐ ┌──────────────────────┐
-│ TransformZone   │ │TransformStationInfo  │
-│ Info (Lambda)   │ │      (Lambda)        │
-│                 │ │                      │
-│                 │ │                      │
-└─────────────────┘ └──────────────────────┘
-     │                       │
-     └───────────┬───────────┘
-                 │
-                 ▼
-┌──────────────────────────────┐
-│TransformStationData (Lambda) │
-│ - Reads 5 CSV files          │
-│ - Merges e_price + s_price   │
-│ - Outputs 4 metrics          │
-└──────────────┬───────────────┘
-               │
-               ▼
-┌──────────────────────────────┐
-│ EvaluateTransformation       │
-│ Results (Pass Task)          │
-│ - Extract success flags      │
-│ - Aggregate results          │
-└────────────┬─────────────────┘
-             │
-             ▼
-┌─────────────────────────────┐
-│ AllTransformationsSuccessful?│
-│         (Choice)             │
-└────────┬────────────┬────────┘
-      ✅ YES         ❌ NO
-         │            │
-         ▼            ▼
-┌────────────┐ ┌────────────┐
-│Transformation│ │Transformation│
-│  Complete   │ │   Failed    │
-│  (Succeed)  │ │   (Fail)    │
-└────────────┘ └────────────┘
-```
+The following diagram illustrates the complete ETL pipeline workflow:
+
+![Step Functions Workflow](./docs/images/workflow-diagram.png)
+
+*Figure: Step Functions state machine orchestrating CSV validation and parallel data transformation*
 
 ### Lambda Functions
 
