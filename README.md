@@ -194,7 +194,7 @@ The following diagram illustrates the complete ETL pipeline workflow:
 
 The actual Step Functions state machine as shown in the AWS Console:
 
-![Step Functions Graph](./docs/images/stepfunction_graph.png)
+![Step Functions Graph](./docs/images/stepfunctions_graph.png)
 
 *Figure: Step Functions execution graph from AWS Console showing all states and transitions*
 
